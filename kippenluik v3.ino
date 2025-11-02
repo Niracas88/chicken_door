@@ -14,7 +14,7 @@ int lightThreshold = LIGHT_DEFAULT;
 unsigned long maxOpenTime = 10000;
 unsigned long maxCloseTime = 10000;
 
-enum DoorState { UNKNOWN, OPEN, CLOSED, MOVING_UP, MOVING_DOWN };
+enum DoorState { UNKNOWN, OPEN, CLOSED, MOVING_UP, MOVING_DOWN, ERROR_STATE };
 DoorState state = UNKNOWN;
 unsigned long lastPrint = 0;
 
@@ -81,6 +81,7 @@ void printStatus(int lightValue) {
     case CLOSED: Serial.println("GESLOTEN"); break;
     case MOVING_UP: Serial.println("OPENT"); break;
     case MOVING_DOWN: Serial.println("SLUIT"); break;
+    case ERROR_STATE: Serial.println("FOUT"); break;
     default: Serial.println("ONBEKEND");
   }
 }
@@ -106,6 +107,7 @@ bool moveUntilReedOrTimeout(bool omhoog) {
 
   motorStop();
   Serial.print("Tijdslimiet bereikt bij "); Serial.println(actie);
+  state = ERROR_STATE;
   return false;
 }
 
@@ -210,13 +212,20 @@ void setup() {
   delay(100);
   loadConfig();
 
-  Serial.println("Kippenluik met stabiele reed-detectie en kalibratie.");
+  Serial.println("Kippenluik met stabiele reed-detectie, homing en foutstatus.");
   Serial.println("Commando's: T=xxx (drempel) | S? (status) | CAL (kalibratie)");
   Serial.print("Ingestelde drempel: "); Serial.println(lightThreshold);
 
   if (reedActiveStable(reedBottom)) state = CLOSED;
   else if (reedActiveStable(reedTop)) state = OPEN;
   else state = UNKNOWN;
+
+  // Homing bij onbekende startpositie
+  if (state == UNKNOWN) {
+    Serial.println("Homing: ga omlaag tot onderste reed...");
+    moveUntilReedOrTimeout(false);
+    state = CLOSED;
+  }
 }
 
 // --- Hoofdlus ---
@@ -232,13 +241,13 @@ void loop() {
   if (lightValue > lightThreshold && state != OPEN) {
     state = MOVING_UP;
     if (moveUntilReedOrTimeout(true)) state = OPEN;
-    else state = UNKNOWN;
+    else state = ERROR_STATE;
   }
 
   if (lightValue <= lightThreshold && state != CLOSED) {
     state = MOVING_DOWN;
     if (moveUntilReedOrTimeout(false)) state = CLOSED;
-    else state = UNKNOWN;
+    else state = ERROR_STATE;
   }
 
   delay(200);

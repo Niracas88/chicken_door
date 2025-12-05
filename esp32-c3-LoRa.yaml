@@ -1,0 +1,64 @@
+esphome:
+  name: esp32c3-lora
+  friendly_name: ESP32-C3 LoRa RX
+
+esp32:
+  board: esp32-c3-devkitm-1      # zelfde board als in je DHT-setup
+  framework:
+    type: arduino
+
+logger:
+  level: DEBUG
+
+wifi:
+  ssid: "BvdBHome"
+  password: "^qsW6ES74JSm24!JTxOpW3!6WLIal@"
+
+  # Neem over wat in de werkende DHT-config stond:
+  manual_ip:
+    static_ip: 192.168.0.50
+    gateway: 192.168.0.1
+    subnet: 255.255.255.0
+
+  ap:
+    ssid: "esp32c3_lora_fallback"
+    password: "12345678"
+
+captive_portal:
+
+api:
+ota:
+  platform: esphome
+
+web_server:
+  port: 80
+
+# SPI-bus naar RFM95W (ESP32-C3)
+spi:
+  clk_pin: GPIO4
+  mosi_pin: GPIO6
+  miso_pin: GPIO5
+
+# SX127x (RFM95W) LoRa-config
+sx127x:
+  cs_pin: GPIO7
+  rst_pin: GPIO2
+  dio0_pin: GPIO3
+
+  frequency: 868000000      # 868 MHz
+  modulation: LORA
+  bandwidth: 125_0kHz
+  spreading_factor: 7
+  coding_rate: CR_4_5
+  sync_value: 0x12          # zelfde als Arduino-LoRa
+  crc_enable: false
+  preamble_size: 8
+  rx_start: true
+
+  on_packet:
+    then:
+      - lambda: |-
+          ESP_LOGD("lora", "packet %s", format_hex(x).c_str());
+          std::string s(x.begin(), x.end());
+          ESP_LOGD("lora", "text: %s", s.c_str());
+          ESP_LOGD("lora", "rssi: %.2f dB, snr: %.2f dB", rssi, snr);

@@ -112,5 +112,85 @@ sx127x:
           }
 
           if (reed_bottom_val == 0 || reed_bottom_val == 1) {
-            id(lora_reed_bottom).publish_state(reed_bott
+            id(lora_reed_bottom).publish_state(reed_bottom_val == 1);
+          }
 
+          // RSSI en SNR ook als sensoren publiceren
+          id(lora_rssi).publish_state(rssi);
+          id(lora_snr).publish_state(snr);
+
+# Sensors die in Home Assistant zichtbaar worden
+sensor:
+  - platform: template
+    id: lora_light
+    name: "Kippenluik lichtwaarde"
+    unit_of_measurement: ""
+    icon: "mdi:brightness-5"
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    id: lora_threshold_rx
+    name: "Kippenluik drempel (0-1023)"
+    unit_of_measurement: ""
+    icon: "mdi:tune-variant"
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    id: lora_rssi
+    name: "LoRa RSSI"
+    unit_of_measurement: "dBm"
+    icon: "mdi:signal-cellular-3"
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    id: lora_snr
+    name: "LoRa SNR"
+    unit_of_measurement: "dB"
+    icon: "mdi:waveform"
+    accuracy_decimals: 1
+    update_interval: never
+
+# Binary sensoren voor de reed-contacten (vanuit Arduino)
+binary_sensor:
+  - platform: template
+    id: lora_reed_top
+    name: "Kippenluik bovenste reed"
+    device_class: opening
+
+  - platform: template
+    id: lora_reed_bottom
+    name: "Kippenluik onderste reed"
+    device_class: opening
+
+# Tekstsensor voor de status van het luik ("OPEN", "CLOSED", ...)
+text_sensor:
+  - platform: template
+    id: lora_door_state
+    name: "Kippenluik status"
+
+# Threshold instellen in Home Assistant en via LoRa naar Arduino sturen
+number:
+  - platform: template
+    id: lora_threshold
+    name: "Kippenluik threshold (0-255 naar LoRa)"
+    min_value: 0
+    max_value: 255
+    step: 1
+    optimistic: true
+    restore_value: true
+    icon: "mdi:tune-variant"
+    on_value:
+      - lambda: |-
+          // x = nieuwe waarde 0–255
+          uint8_t thr = static_cast<uint8_t>(x);
+          std::vector<uint8_t> pkt;
+          pkt.push_back('T');   // commando type 'T' = threshold
+          pkt.push_back(thr);   // 0-255
+
+          auto err = id(lora_radio).transmit_packet(pkt);
+          ESP_LOGI("lora",
+                   "TX threshold packet: cmd='T', val=%u (status=%d)",
+                   (unsigned) thr, (int) err);

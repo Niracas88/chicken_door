@@ -3,7 +3,7 @@ esphome:
   friendly_name: ESP32-C3 LoRa RX
 
 esp32:
-  board: esp32-c3-devkitm-1      # zelfde board als in je DHT-setup
+  board: esp32-c3-devkitm-1
   framework:
     type: arduino
 
@@ -14,7 +14,6 @@ wifi:
   ssid: "BvdBHome"
   password: "^qsW6ES74JSm24!JTxOpW3!6WLIal@"
 
-  # Neem over wat in de werkende DHT-config stond:
   manual_ip:
     static_ip: 192.168.0.50
     gateway: 192.168.0.1
@@ -41,6 +40,7 @@ spi:
 
 # SX127x (RFM95W) LoRa-config
 sx127x:
+  id: lora_radio
   cs_pin: GPIO7
   rst_pin: GPIO2
   dio0_pin: GPIO3
@@ -55,10 +55,62 @@ sx127x:
   preamble_size: 8
   rx_start: true
 
+  # Wanneer een JSON-pakket van de Arduino binnenkomt
   on_packet:
     then:
       - lambda: |-
-          ESP_LOGD("lora", "packet %s", format_hex(x).c_str());
+          // x = std::vector<uint8_t> payload
+          ESP_LOGD("lora", "raw packet: %s", format_hex(x).c_str());
+
           std::string s(x.begin(), x.end());
-          ESP_LOGD("lora", "text: %s", s.c_str());
+          ESP_LOGD("lora", "text packet: %s", s.c_str());
           ESP_LOGD("lora", "rssi: %.2f dB, snr: %.2f dB", rssi, snr);
+
+          // eenvoudige JSON-parser voor payload:
+          // {"light":512,"threshold":600,"door":"OPEN","reedTop":0,"reedBottom":1}
+
+          auto get_int = [&](const char *key) -> int {
+            std::string k(key);
+            size_t pos = s.find(k);
+            if (pos == std::string::npos) return -1;
+            pos += k.size();
+            size_t end = s.find_first_of(",}", pos);
+            if (end == std::string::npos) end = s.size();
+            std::string num = s.substr(pos, end - pos);
+            return atoi(num.c_str());
+          };
+
+          auto get_str = [&](const char *key) -> std::string {
+            std::string k(key);
+            size_t pos = s.find(k);
+            if (pos == std::string::npos) return "";
+            pos += k.size();
+            size_t end = s.find('"', pos);
+            if (end == std::string::npos) return "";
+            return s.substr(pos, end - pos);
+          };
+
+          int light_val      = get_int("\"light\":");
+          int threshold_val  = get_int("\"threshold\":");
+          int reed_top_val   = get_int("\"reedTop\":");
+          int reed_bottom_val= get_int("\"reedBottom\":");
+          std::string door   = get_str("\"door\":\"");
+
+          if (light_val >= 0) {
+            id(lora_light).publish_state(light_val);
+          }
+          if (threshold_val >= 0) {
+            id(lora_threshold_rx).publish_state(threshold_val);
+          }
+
+          if (!door.empty()) {
+            id(lora_door_state).publish_state(door.c_str());
+          }
+
+          if (reed_top_val == 0 || reed_top_val == 1) {
+            id(lora_reed_top).publish_state(reed_top_val == 1);
+          }
+
+          if (reed_bottom_val == 0 || reed_bottom_val == 1) {
+            id(lora_reed_bottom).publish_state(reed_bott
+

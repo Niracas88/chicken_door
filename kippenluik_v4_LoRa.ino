@@ -4,18 +4,19 @@
 #include <LoRa.h>
 
 // -----------------------------
-// Pinconfig kippenluik (ongewijzigd)
+// Pinconfig kippenluik
 // -----------------------------
 const int ENA = 10, IN1 = 9, IN2 = 8;
 const int reedTop = 2, reedBottom = 4, LDRpin = A0;
 const int PWM_SPEED = 200;
+
 const int EEPROM_ADDR_THRESHOLD = 0;
-const int EEPROM_ADDR_OPEN = 4;
-const int EEPROM_ADDR_CLOSE = 8;
-const int LIGHT_DEFAULT = 500;
+const int EEPROM_ADDR_OPEN      = 4;
+const int EEPROM_ADDR_CLOSE     = 8;
+const int LIGHT_DEFAULT         = 500;
 
 int lightThreshold = LIGHT_DEFAULT;
-unsigned long maxOpenTime = 10000;
+unsigned long maxOpenTime  = 10000;
 unsigned long maxCloseTime = 10000;
 
 enum DoorState { UNKNOWN, OPEN, CLOSED, MOVING_UP, MOVING_DOWN, ERROR_STATE };
@@ -23,12 +24,12 @@ DoorState state = UNKNOWN;
 unsigned long lastPrint = 0;
 
 // -----------------------------
-// LoRa-config (pinnen zó gekozen dat ze niet botsen)
+// LoRa-config
 // -----------------------------
 const long LORA_FREQUENCY = 868E6;   // 868 MHz (EU)
-const byte LORA_SYNC_WORD = 0x12;    // standaard private sync word
+const byte LORA_SYNC_WORD  = 0x12;   // private sync word
 
-// Vrije digitale pinnen gebruikt voor RFM95W:
+// RFM95W-pinnen op de Arduino
 const int LORA_NSS  = 7;
 const int LORA_RST  = 6;
 const int LORA_DIO0 = 3;
@@ -38,18 +39,20 @@ const unsigned long LORA_INTERVAL = 5000; // elke 5 s een pakket sturen
 bool loraOk = false;
 
 // -----------------------------
-// Hulpfuncties motor
+// Motorhelpers
 // -----------------------------
 void motorStop() {
   analogWrite(ENA, 0);
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, LOW);
 }
+
 void motorUp() {
   analogWrite(ENA, PWM_SPEED);
   digitalWrite(IN1, HIGH);
   digitalWrite(IN2, LOW);
 }
+
 void motorDown() {
   analogWrite(ENA, PWM_SPEED);
   digitalWrite(IN1, LOW);
@@ -60,8 +63,10 @@ void motorDown() {
 // Reed helpers
 // -----------------------------
 bool reedActiveRaw(int pin) {
-  return digitalRead(pin) == LOW; // LOW = actief bij INPUT_PULLUP
+  // LOW = actief bij INPUT_PULLUP
+  return digitalRead(pin) == LOW;
 }
+
 bool reedActiveStable(int pin, unsigned long ms = 30) {
   bool first = reedActiveRaw(pin);
   unsigned long t0 = millis();
@@ -84,11 +89,13 @@ void saveThreshold(int val) {
   Serial.print("Drempel opgeslagen (EEPROM) = ");
   Serial.println(lightThreshold);
 }
+
 void loadConfig() {
   int val;
   EEPROM.get(EEPROM_ADDR_THRESHOLD, val);
   if (val < 0 || val > 1023) val = LIGHT_DEFAULT;
   lightThreshold = val;
+
   EEPROM.get(EEPROM_ADDR_OPEN, maxOpenTime);
   EEPROM.get(EEPROM_ADDR_CLOSE, maxCloseTime);
   if (maxOpenTime == 0 || maxCloseTime == 0) {
@@ -97,7 +104,7 @@ void loadConfig() {
 }
 
 // -----------------------------
-// Status helpers
+// Statushelpers
 // -----------------------------
 const char* doorStateToString(DoorState s) {
   switch (s) {
@@ -111,10 +118,12 @@ const char* doorStateToString(DoorState s) {
 }
 
 void printStatus(int lightValue) {
-  Serial.print("Licht="); Serial.print(lightValue);
-  Serial.print("  Drempel="); Serial.print(lightThreshold);
-  Serial.print("  Top="); Serial.print(reedActiveRaw(reedTop) ? "GESLOTEN" : "OPEN");
-  Serial.print("  Bottom="); Serial.print(reedActiveRaw(reedBottom) ? "GESLOTEN" : "OPEN");
+  Serial.print("Licht=");      Serial.print(lightValue);
+  Serial.print("  Drempel=");  Serial.print(lightThreshold);
+  Serial.print("  Top=");
+  Serial.print(reedActiveRaw(reedTop) ? "GESLOTEN" : "OPEN");
+  Serial.print("  Bottom=");
+  Serial.print(reedActiveRaw(reedBottom) ? "GESLOTEN" : "OPEN");
   Serial.print("  Luik=");
   Serial.println(doorStateToString(state));
 }
@@ -125,8 +134,8 @@ void printStatus(int lightValue) {
 bool moveUntilReedOrTimeout(bool omhoog) {
   unsigned long start = millis();
   unsigned long limit = omhoog ? maxOpenTime : maxCloseTime;
-  const char* actie = omhoog ? "openen" : "sluiten";
-  int stopPin = omhoog ? reedTop : reedBottom;
+  const char* actie   = omhoog ? "openen" : "sluiten";
+  int stopPin         = omhoog ? reedTop : reedBottom;
 
   Serial.print("Actie: "); Serial.println(actie);
   if (omhoog) motorUp(); else motorDown();
@@ -147,11 +156,11 @@ bool moveUntilReedOrTimeout(bool omhoog) {
 }
 
 // -----------------------------
-// Calibratie zonder tijdslimiet
+// Calibratie zonder harde tijdslimiet
 // -----------------------------
 void calibrateTimes() {
   Serial.println("Start automatische calibratie...");
-  unsigned long t0, durClose, durOpen;
+  unsigned long t0, durClose = 0, durOpen = 0;
 
   // Eerst volledig sluiten
   if (!reedActiveStable(reedBottom)) {
@@ -160,8 +169,8 @@ void calibrateTimes() {
     t0 = millis();
     while (!reedActiveStable(reedBottom)) {
       if ((millis() - t0) % 1000 < 10) {
-        Serial.print("DBG Top="); Serial.print(reedActiveRaw(reedTop));
-        Serial.print(" Bottom="); Serial.println(reedActiveRaw(reedBottom));
+        Serial.print("DBG Top=");    Serial.print(reedActiveRaw(reedTop));
+        Serial.print(" Bottom=");    Serial.println(reedActiveRaw(reedBottom));
       }
       delay(10);
     }
@@ -181,8 +190,8 @@ void calibrateTimes() {
   motorUp();
   while (!reedActiveStable(reedTop)) {
     if ((millis() - t0) % 1000 < 10) {
-      Serial.print("DBG Top="); Serial.print(reedActiveRaw(reedTop));
-      Serial.print(" Bottom="); Serial.println(reedActiveRaw(reedBottom));
+      Serial.print("DBG Top=");    Serial.print(reedActiveRaw(reedTop));
+      Serial.print(" Bottom=");    Serial.println(reedActiveRaw(reedBottom));
     }
     delay(10);
   }
@@ -198,8 +207,8 @@ void calibrateTimes() {
   motorDown();
   while (!reedActiveStable(reedBottom)) {
     if ((millis() - t0) % 1000 < 10) {
-      Serial.print("DBG Top="); Serial.print(reedActiveRaw(reedTop));
-      Serial.print(" Bottom="); Serial.println(reedActiveRaw(reedBottom));
+      Serial.print("DBG Top=");    Serial.print(reedActiveRaw(reedTop));
+      Serial.print(" Bottom=");    Serial.println(reedActiveRaw(reedBottom));
     }
     delay(10);
   }
@@ -208,13 +217,13 @@ void calibrateTimes() {
   Serial.print("Onderste reed opnieuw bereikt na "); Serial.print(durClose); Serial.println(" ms.");
 
   // Opslaan met 10% marge
-  maxOpenTime  = durOpen  * 1.1;
-  maxCloseTime = durClose * 1.1;
-  EEPROM.put(EEPROM_ADDR_OPEN, maxOpenTime);
+  maxOpenTime  = (unsigned long)(durOpen  * 1.1);
+  maxCloseTime = (unsigned long)(durClose * 1.1);
+  EEPROM.put(EEPROM_ADDR_OPEN,  maxOpenTime);
   EEPROM.put(EEPROM_ADDR_CLOSE, maxCloseTime);
 
-  Serial.print("Calibratie voltooid. Open="); Serial.print(durOpen);
-  Serial.print(" ms, Dicht="); Serial.print(durClose);
+  Serial.print("Calibratie voltooid. Open=");  Serial.print(durOpen);
+  Serial.print(" ms, Dicht=");                 Serial.print(durClose);
   Serial.println(" ms (met 10% marge).");
   state = CLOSED;
 }
@@ -226,12 +235,14 @@ void handleSerial() {
   if (!Serial.available()) return;
   String line = Serial.readStringUntil('\n');
   line.trim();
+
   if (line.startsWith("T=")) {
     int v = line.substring(2).toInt();
     saveThreshold(v);
     Serial.print("Nieuwe drempel via Serial: "); Serial.println(lightThreshold);
   } else if (line == "S?") {
-    printStatus(analogRead(LDRpin));
+    int lightValue = analogRead(LDRpin);
+    printStatus(lightValue);
   } else if (line == "CAL") {
     calibrateTimes();
   } else {
@@ -246,11 +257,11 @@ void sendLoraStatus(int lightValue) {
   if (!loraOk) return;
 
   // JSON-payload
-  // Voorbeeld: {"light":512,"threshold":600,"door":"OPEN","reedTop":0,"reedBottom":1}
+  // {"light":512,"threshold":600,"door":"OPEN","reedTop":0,"reedBottom":1}
   LoRa.beginPacket();
   LoRa.print("{\"light\":");
   LoRa.print(lightValue);
-  LoRo.print(",\"threshold\":");
+  LoRa.print(",\"threshold\":");
   LoRa.print(lightThreshold);
   LoRa.print(",\"door\":\"");
   LoRa.print(doorStateToString(state));
@@ -265,7 +276,7 @@ void sendLoraStatus(int lightValue) {
 // -----------------------------
 // LoRa: RX-commando's verwerken
 // -----------------------------
-void handleLoraRx() {
+void handleLoraRx(int currentLight) {
   if (!loraOk) return;
 
   int packetSize = LoRa.parsePacket();
@@ -292,6 +303,10 @@ void handleLoraRx() {
       Serial.print(val);
       Serial.print(") -> ");
       Serial.println(newThreshold);
+    } else if (cmd == 'S') {
+      // Statusrequest via LoRa
+      Serial.println("LoRa-statusrequest ontvangen ('S'), stuur status terug.");
+      sendLoraStatus(currentLight);
     } else {
       Serial.print("Onbekend LoRa-commando: ");
       Serial.println((char)cmd);
@@ -320,9 +335,9 @@ void setup() {
   Serial.println("Commando's: T=xxx (drempel) | S? (status) | CAL (kalibratie)");
   Serial.print("Ingestelde drempel: "); Serial.println(lightThreshold);
 
-  if (reedActiveStable(reedBottom)) state = CLOSED;
-  else if (reedActiveStable(reedTop)) state = OPEN;
-  else state = UNKNOWN;
+  if (reedActiveStable(reedBottom))      state = CLOSED;
+  else if (reedActiveStable(reedTop))    state = OPEN;
+  else                                   state = UNKNOWN;
 
   // Homing bij onbekende startpositie
   if (state == UNKNOWN) {
@@ -350,9 +365,11 @@ void setup() {
 // -----------------------------
 void loop() {
   handleSerial();
-  handleLoraRx();  // eerst inkomende LoRa-commando's verwerken
 
   int lightValue = analogRead(LDRpin);
+
+  // inkomende LoRa-commando's verwerken (met actuele lichtwaarde)
+  handleLoraRx(lightValue);
 
   if (millis() - lastPrint > 5000) {
     printStatus(lightValue);

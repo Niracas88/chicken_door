@@ -20,38 +20,41 @@ wifi:
     subnet: 255.255.255.0
 
   ap:
-    ssid: "esp32c3_lora_fallback"
+    ssid: "esp32_lora_fallback"
     password: "12345678"
 
 captive_portal:
 
 api:
+  encryption:
+    key: "cV4s1Y6mO6d6+XwcvFmgc7xvPZ+5nGh7d3bJDxKXnTw="
+
 ota:
   platform: esphome
+  password: "OfuIQi4Wd7"
 
 web_server:
   port: 80
 
-# SPI-bus naar RFM95W (ESP32-C3)
+# SPI-bus naar RFM95W (ESP32 WROOM-32D)
 spi:
-  clk_pin: GPIO4
-  mosi_pin: GPIO6
-  miso_pin: GPIO5
+  clk_pin: GPIO18      # SCK
+  mosi_pin: GPIO23     # MOSI
+  miso_pin: GPIO19     # MISO
 
 # SX127x (RFM95W) LoRa-config
 sx127x:
   id: lora_radio
-  cs_pin: GPIO7
-  rst_pin: GPIO2
-  dio0_pin: GPIO3
-
+  cs_pin: GPIO5        # NSS/CS
+  rst_pin: GPIO14      # RESET
+  dio0_pin: GPIO26     # DIO0 naar GPIO26
   frequency: 868000000      # 868 MHz
   modulation: LORA
   bandwidth: 125_0kHz
   spreading_factor: 7
   coding_rate: CR_4_5
   sync_value: 0x12          # zelfde als Arduino-LoRa
-  crc_enable: false
+  crc_enable: true          # LoRa CRC aan, zoals Arduino-library
   preamble_size: 8
   rx_start: true
 
@@ -66,7 +69,7 @@ sx127x:
           ESP_LOGD("lora", "text packet: %s", s.c_str());
           ESP_LOGD("lora", "rssi: %.2f dB, snr: %.2f dB", rssi, snr);
 
-          // eenvoudige JSON-parser voor payload:
+          // Verwachte JSON-payload:
           // {"light":512,"threshold":600,"door":"OPEN","reedTop":0,"reedBottom":1}
 
           auto get_int = [&](const char *key) -> int {
@@ -90,11 +93,11 @@ sx127x:
             return s.substr(pos, end - pos);
           };
 
-          int light_val      = get_int("\"light\":");
-          int threshold_val  = get_int("\"threshold\":");
-          int reed_top_val   = get_int("\"reedTop\":");
-          int reed_bottom_val= get_int("\"reedBottom\":");
-          std::string door   = get_str("\"door\":\"");
+          int light_val       = get_int("\"light\":");
+          int threshold_val   = get_int("\"threshold\":");
+          int reed_top_val    = get_int("\"reedTop\":");
+          int reed_bottom_val = get_int("\"reedBottom\":");
+          std::string door    = get_str("\"door\":\"");
 
           if (light_val >= 0) {
             id(lora_light).publish_state(light_val);
@@ -115,14 +118,14 @@ sx127x:
             id(lora_reed_bottom).publish_state(reed_bottom_val == 1);
           }
 
-          // RSSI en SNR ook als sensoren publiceren
+          // RSSI en SNR als sensoren publiceren
           id(lora_rssi).publish_state(rssi);
           id(lora_snr).publish_state(snr);
-          
-          // Update last received timestamp
+
+          // Timestamp laatste ontvangst (UNIX-timestamp)
           id(lora_last_rx).publish_state(id(esptime).now().timestamp);
 
-# Sensors die in Home Assistant zichtbaar worden
+# Sensors zichtbaar in Home Assistant
 sensor:
   - platform: template
     id: lora_light
@@ -170,7 +173,14 @@ sensor:
     entity_category: diagnostic
     update_interval: never
 
-  # WiFi signal strength for diagnostics
+  - platform: template
+    id: lora_last_tx
+    name: "LoRa laatste verzending"
+    device_class: timestamp
+    entity_category: diagnostic
+    update_interval: never
+
+  # WiFi signaalsterkte (diagnostisch)
   - platform: wifi_signal
     name: "WiFi signaalsterkte"
     update_interval: 60s
@@ -216,7 +226,7 @@ number:
     optimistic: true
     restore_value: true
     icon: "mdi:tune-variant"
-    mode: box  # Shows as input box instead of slider
+    mode: box  # input box i.p.v. slider
     entity_category: config
     on_value:
       - lambda: |-
@@ -230,23 +240,16 @@ number:
           ESP_LOGI("lora",
                    "TX threshold packet: cmd='T', val=%u (status=%d)",
                    (unsigned) thr, (int) err);
-          
-          // Update timestamp van laatste verzending
+
+          // Timestamp van laatste verzending
           id(lora_last_tx).publish_state(id(esptime).now().timestamp);
 
-  - platform: template
-    id: lora_last_tx
-    name: "LoRa laatste verzending"
-    device_class: timestamp
-    entity_category: diagnostic
-    update_interval: never
-
-# Time component for timestamps
+# Time component voor timestamps
 time:
   - platform: homeassistant
     id: esptime
 
-# Optional: Button to manually request status update from Arduino
+# Button om manueel een statusupdate op te vragen (commando 'S')
 button:
   - platform: template
     name: "Kippenluik status opvragen"

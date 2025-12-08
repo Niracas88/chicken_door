@@ -118,6 +118,9 @@ sx127x:
           // RSSI en SNR ook als sensoren publiceren
           id(lora_rssi).publish_state(rssi);
           id(lora_snr).publish_state(snr);
+          
+          // Update last received timestamp
+          id(lora_last_rx).publish_state(id(esptime).now().timestamp);
 
 # Sensors die in Home Assistant zichtbaar worden
 sensor:
@@ -128,6 +131,7 @@ sensor:
     icon: "mdi:brightness-5"
     accuracy_decimals: 0
     update_interval: never
+    state_class: measurement
 
   - platform: template
     id: lora_threshold_rx
@@ -136,6 +140,7 @@ sensor:
     icon: "mdi:tune-variant"
     accuracy_decimals: 0
     update_interval: never
+    state_class: measurement
 
   - platform: template
     id: lora_rssi
@@ -144,6 +149,9 @@ sensor:
     icon: "mdi:signal-cellular-3"
     accuracy_decimals: 1
     update_interval: never
+    device_class: signal_strength
+    state_class: measurement
+    entity_category: diagnostic
 
   - platform: template
     id: lora_snr
@@ -152,6 +160,21 @@ sensor:
     icon: "mdi:waveform"
     accuracy_decimals: 1
     update_interval: never
+    state_class: measurement
+    entity_category: diagnostic
+
+  - platform: template
+    id: lora_last_rx
+    name: "LoRa laatste ontvangst"
+    device_class: timestamp
+    entity_category: diagnostic
+    update_interval: never
+
+  # WiFi signal strength for diagnostics
+  - platform: wifi_signal
+    name: "WiFi signaalsterkte"
+    update_interval: 60s
+    entity_category: diagnostic
 
 # Binary sensoren voor de reed-contacten (vanuit Arduino)
 binary_sensor:
@@ -165,11 +188,22 @@ binary_sensor:
     name: "Kippenluik onderste reed"
     device_class: opening
 
+  # Status van de ESP32 zelf
+  - platform: status
+    name: "ESP32 status"
+    entity_category: diagnostic
+
 # Tekstsensor voor de status van het luik ("OPEN", "CLOSED", ...)
 text_sensor:
   - platform: template
     id: lora_door_state
     name: "Kippenluik status"
+    icon: "mdi:gate"
+
+  - platform: wifi_info
+    ip_address:
+      name: "ESP32 IP adres"
+      entity_category: diagnostic
 
 # Threshold instellen in Home Assistant en via LoRa naar Arduino sturen
 number:
@@ -182,6 +216,8 @@ number:
     optimistic: true
     restore_value: true
     icon: "mdi:tune-variant"
+    mode: box  # Shows as input box instead of slider
+    entity_category: config
     on_value:
       - lambda: |-
           // x = nieuwe waarde 0–255
@@ -194,3 +230,31 @@ number:
           ESP_LOGI("lora",
                    "TX threshold packet: cmd='T', val=%u (status=%d)",
                    (unsigned) thr, (int) err);
+          
+          // Update timestamp van laatste verzending
+          id(lora_last_tx).publish_state(id(esptime).now().timestamp);
+
+  - platform: template
+    id: lora_last_tx
+    name: "LoRa laatste verzending"
+    device_class: timestamp
+    entity_category: diagnostic
+    update_interval: never
+
+# Time component for timestamps
+time:
+  - platform: homeassistant
+    id: esptime
+
+# Optional: Button to manually request status update from Arduino
+button:
+  - platform: template
+    name: "Kippenluik status opvragen"
+    icon: "mdi:refresh"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          std::vector<uint8_t> pkt;
+          pkt.push_back('S');   // 'S' = Status request command
+          auto err = id(lora_radio).transmit_packet(pkt);
+          ESP_LOGI("lora", "TX status request (status=%d)", (int) err);

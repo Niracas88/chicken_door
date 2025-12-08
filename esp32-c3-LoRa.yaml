@@ -1,9 +1,9 @@
 esphome:
-  name: esp32c3-lora
-  friendly_name: ESP32-C3 LoRa RX
+  name: esp32-wroom-wifi-debug
+  friendly_name: ESP32 WROOM WiFi Debug Minimal
 
 esp32:
-  board: esp32-c3-devkitm-1
+  board: esp32dev
   framework:
     type: arduino
 

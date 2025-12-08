@@ -14,6 +14,14 @@ wifi:
   ssid: "BvdBHome"
   password: "^qsW6ES74JSm24!JTxOpW3!6WLIal@"
 
+  on_connect:
+    - logger.log:
+        format: "✓ Verbonden met WiFi. IP: %s, RSSI: %d dBm"
+        args: ['WiFi.localIP().toString().c_str()', 'WiFi.RSSI()']
+
+  on_disconnect:
+    - logger.log: "✗ WiFi verbinding verbroken"
+    
   manual_ip:
     static_ip: 192.168.0.50
     gateway: 192.168.0.1

@@ -1,6 +1,10 @@
 esphome:
-  name: esp32-wroom-wifi-debug
-  friendly_name: ESP32 WROOM WiFi Debug Minimal
+  name: esp32-wroom-chicken-rx-tx
+  friendly_name: ESP32 WROOM Chicken RX/TX
+
+external_components:
+  - source: github://pr#7490
+    components: [ sx127x ]
 
 esp32:
   board: esp32dev
@@ -14,18 +18,16 @@ wifi:
   ssid: "IOT_Balegem"
   password: "UN1Jeh3O3S"
 
+  reboot_timeout: 0s
+  power_save_mode: none
+
   on_connect:
     - logger.log:
-        format: "✓ Verbonden met WiFi. IP: %s, RSSI: %d dBm"
+        format: "WiFi verbonden. IP: %s, RSSI: %d dBm"
         args: ['WiFi.localIP().toString().c_str()', 'WiFi.RSSI()']
 
   on_disconnect:
-    - logger.log: "✗ WiFi verbinding verbroken"
-    
-  manual_ip:
-    static_ip: 192.168.0.50
-    gateway: 192.168.0.1
-    subnet: 255.255.255.0
+    - logger.log: "WiFi verbinding verbroken, probeer opnieuw..."
 
   ap:
     ssid: "esp32_lora_fallback"
@@ -41,11 +43,9 @@ ota:
   platform: esphome
   password: "OfuIQi4Wd7"
 
-web_server:
-  port: 80
-
 # SPI-bus naar RFM95W (ESP32 WROOM-32D)
 spi:
+  id: bus_a
   clk_pin: GPIO18      # SCK
   mosi_pin: GPIO23     # MOSI
   miso_pin: GPIO19     # MISO
@@ -53,16 +53,17 @@ spi:
 # SX127x (RFM95W) LoRa-config
 sx127x:
   id: lora_radio
+  spi_id: bus_a
   cs_pin: GPIO5        # NSS/CS
   rst_pin: GPIO14      # RESET
-  dio0_pin: GPIO26     # DIO0 naar GPIO26
-  frequency: 868000000      # 868 MHz
+  dio0_pin: GPIO26     # DIO0
+  frequency: 868000000
   modulation: LORA
   bandwidth: 125_0kHz
   spreading_factor: 7
   coding_rate: CR_4_5
   sync_value: 0x12          # zelfde als Arduino-LoRa
-  crc_enable: true          # LoRa CRC aan, zoals Arduino-library
+  crc_enable: true
   preamble_size: 8
   rx_start: true
 
@@ -71,13 +72,14 @@ sx127x:
     then:
       - lambda: |-
           // x = std::vector<uint8_t> payload
-          ESP_LOGD("lora", "raw packet: %s", format_hex(x).c_str());
+          ESP_LOGI("lora", "RX packet, len=%u", (unsigned) x.size());
+          ESP_LOGI("lora", "RX raw: %s", format_hex(x).c_str());
 
           std::string s(x.begin(), x.end());
-          ESP_LOGD("lora", "text packet: %s", s.c_str());
-          ESP_LOGD("lora", "rssi: %.2f dB, snr: %.2f dB", rssi, snr);
+          ESP_LOGI("lora", "RX text: %s", s.c_str());
+          ESP_LOGI("lora", "RSSI=%.2f dB, SNR=%.2f dB", rssi, snr);
 
-          // Verwachte JSON-payload:
+          // Verwachte JSON-payload van Arduino:
           // {"light":512,"threshold":600,"door":"OPEN","reedTop":0,"reedBottom":1}
 
           auto get_int = [&](const char *key) -> int {
@@ -133,12 +135,10 @@ sx127x:
           // Timestamp laatste ontvangst (UNIX-timestamp)
           id(lora_last_rx).publish_state(id(esptime).now().timestamp);
 
-# Sensors zichtbaar in Home Assistant
 sensor:
   - platform: template
     id: lora_light
     name: "Kippenluik lichtwaarde"
-    unit_of_measurement: ""
     icon: "mdi:brightness-5"
     accuracy_decimals: 0
     update_interval: never
@@ -147,7 +147,6 @@ sensor:
   - platform: template
     id: lora_threshold_rx
     name: "Kippenluik drempel (0-1023)"
-    unit_of_measurement: ""
     icon: "mdi:tune-variant"
     accuracy_decimals: 0
     update_interval: never
@@ -179,6 +178,7 @@ sensor:
     name: "LoRa laatste ontvangst"
     device_class: timestamp
     entity_category: diagnostic
+    accuracy_decimals: 1
     update_interval: never
 
   - platform: template
@@ -186,15 +186,14 @@ sensor:
     name: "LoRa laatste verzending"
     device_class: timestamp
     entity_category: diagnostic
+    accuracy_decimals: 1
     update_interval: never
 
-  # WiFi signaalsterkte (diagnostisch)
   - platform: wifi_signal
     name: "WiFi signaalsterkte"
     update_interval: 60s
     entity_category: diagnostic
 
-# Binary sensoren voor de reed-contacten (vanuit Arduino)
 binary_sensor:
   - platform: template
     id: lora_reed_top
@@ -206,12 +205,10 @@ binary_sensor:
     name: "Kippenluik onderste reed"
     device_class: opening
 
-  # Status van de ESP32 zelf
   - platform: status
     name: "ESP32 status"
     entity_category: diagnostic
 
-# Tekstsensor voor de status van het luik ("OPEN", "CLOSED", ...)
 text_sensor:
   - platform: template
     id: lora_door_state
@@ -223,7 +220,6 @@ text_sensor:
       name: "ESP32 IP adres"
       entity_category: diagnostic
 
-# Threshold instellen in Home Assistant en via LoRa naar Arduino sturen
 number:
   - platform: template
     id: lora_threshold
@@ -234,30 +230,34 @@ number:
     optimistic: true
     restore_value: true
     icon: "mdi:tune-variant"
-    mode: box  # input box i.p.v. slider
+    mode: box
     entity_category: config
     on_value:
       - lambda: |-
-          // x = nieuwe waarde 0–255
+          // Eerste run (tijdens boot) overslaan om SPI-fouten te vermijden
+          static bool first_run = true;
+          if (first_run) {
+            first_run = false;
+            ESP_LOGD("lora", "Eerste init van lora_threshold, geen LoRa TX.");
+            return;
+          }
+
           uint8_t thr = static_cast<uint8_t>(x);
           std::vector<uint8_t> pkt;
           pkt.push_back('T');   // commando type 'T' = threshold
           pkt.push_back(thr);   // 0-255
 
-          auto err = id(lora_radio).transmit_packet(pkt);
+          id(lora_radio).transmit_packet(pkt);
           ESP_LOGI("lora",
-                   "TX threshold packet: cmd='T', val=%u (status=%d)",
-                   (unsigned) thr, (int) err);
+                   "TX threshold packet: cmd='T', val=%u",
+                   (unsigned) thr);
 
-          // Timestamp van laatste verzending
           id(lora_last_tx).publish_state(id(esptime).now().timestamp);
 
-# Time component voor timestamps
 time:
   - platform: homeassistant
     id: esptime
 
-# Button om manueel een statusupdate op te vragen (commando 'S')
 button:
   - platform: template
     name: "Kippenluik status opvragen"
@@ -267,5 +267,7 @@ button:
       - lambda: |-
           std::vector<uint8_t> pkt;
           pkt.push_back('S');   // 'S' = Status request command
-          auto err = id(lora_radio).transmit_packet(pkt);
-          ESP_LOGI("lora", "TX status request (status=%d)", (int) err);
+
+          // versturen, geen returnwaarde
+          id(lora_radio).transmit_packet(pkt);
+          ESP_LOGI("lora", "TX status request");

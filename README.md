@@ -29,104 +29,105 @@ Samen vormen ze een draadloze, betrouwbare oplossing om een kippenluik automatis
   "reedBottom": 1
 }
 
+## 📡 LoRa-commando’s
+
 Verwerkt inkomende LoRa-commando’s:
 
-'T' + value → stel nieuwe lichtdrempel in
+- `'T' + value` → stel nieuwe lichtdrempel in  
+- `'S'` → zend status terug  
 
-'S' → zend status terug
+---
 
-🛰 ESP32 LoRa Bridge (ESPHome)
+## 🛰 ESP32 LoRa Bridge (ESPHome)
 
-De ESP32 ontvangt LoRa-berichten van de Arduino en publiceert die als entiteiten in Home Assistant:
+De ESP32 ontvangt LoRa-berichten van de Arduino en publiceert die als entiteiten in **Home Assistant**:
 
-Lichtwaarde
-
-Drempelwaarde
-
-LoRa RSSI en SNR
-
-Reed-statussen
-
-Luikstatus
-
-Timestamps van RX/TX
+- Lichtwaarde  
+- Drempelwaarde  
+- LoRa RSSI en SNR  
+- Reed-statussen  
+- Luikstatus  
+- Timestamps van RX/TX  
 
 Via Home Assistant kun je:
 
-De lichtdrempel instellen (0–255, LoRa-schaal)
+- De lichtdrempel instellen (0–255, LoRa-schaal)  
+- Handmatig een statusrequest naar de Arduino sturen  
 
-Handmatig een statusrequest naar de Arduino sturen
+De ESP32 gebruikt een aangepaste `sx127x` driver via:
 
-De ESP32 gebruikt een aangepaste sx127x driver via:
-
+```yaml
 external_components:
   - source: github://pr#7490
     components: [ sx127x ]
 
-🔧 Hardwarepinnen
-Arduino UNO → RFM95W
-Signaal	Pin
-NSS	7
-RST	6
-DIO0	3
-MOSI	11
-MISO	12
-SCK	13
-ESP32 WROOM32D → RFM95W
-Signaal	GPIO
-NSS	5
-RST	14
-DIO0	26
-MOSI	23
-MISO	19
-SCK	18
-🧱 Dependencies
-Arduino
+## 🔧 Hardwarepinnen
 
-LoRa library
+### Arduino UNO → RFM95W
 
-EEPROM (standaard)
+| Signaal | Pin |
+|---------|-----|
+| NSS     | 7   |
+| RST     | 6   |
+| DIO0    | 3   |
+| MOSI    | 11  |
+| MISO    | 12  |
+| SCK     | 13  |
 
-SPI (standaard)
+### ESP32 WROOM32D → RFM95W
 
-ESPHome
+| Signaal | GPIO |
+|---------|-------|
+| NSS     | 5     |
+| RST     | 14    |
+| DIO0    | 26    |
+| MOSI    | 23    |
+| MISO    | 19    |
+| SCK     | 18    |
 
-ESPHome 2025.10.0 of recenter
+---
 
-Externe sx127x component via PR
+## 🧱 Dependencies
 
-Home Assistant (optioneel maar aanbevolen)
+### Arduino
+- LoRa library  
+- EEPROM (standaard)  
+- SPI (standaard)
 
-🧪 Testen
+### ESPHome
+- ESPHome 2025.10.0 of recenter  
+- Externe `sx127x` component via PR  
+- Home Assistant (optioneel maar aanbevolen)
 
-Start de Arduino → zou LoRa gereed melden.
+---
 
-Start de ESP32 → ESPHome console moet RX-pakketten tonen.
+## 🧪 Testen
 
-In Home Assistant verschijnen automatisch:
+1. Start de **Arduino** → zou *LoRa gereed* moeten melden.  
+2. Start de **ESP32** → ESPHome-console moet *RX-pakketten* tonen.  
+3. In **Home Assistant** verschijnen automatisch:
+   - lichtsensor  
+   - drempel  
+   - reed-statussen  
+   - luikstatus  
+4. Verander de drempel → ESP32 verstuurt `'T'`-pakket → Arduino past waarde aan.
 
-lichtsensor
+---
 
-drempel
+## 📁 Bestanden
 
-reed-statussen
+- `/arduino/kippenluik.ino`  
+- `/esp32/esp32-wroom-chicken-rx-tx.yaml`  
+- `/docs/README.md` (dit document)
 
-luikstatus
+---
 
-Verander drempel → ESP32 stuurt 'T'-pakket → Arduino past waarde aan.
-
-📁 Bestanden
-
-/arduino/kippenluik.ino
-
-/esp32/esp32-wroom-chicken-rx-tx.yaml
-
-/docs/README.md (dit document)
-
-📜 Licentie
+## 📜 Licentie
 
 Vrij te gebruiken en aan te passen voor niet-commerciële projecten.
 
-💬 Contact / Issues
+---
+
+## 💬 Contact / Issues
 
 Open een GitHub issue bij fouten, suggesties of vragen.

@@ -11,8 +11,8 @@ logger:
   level: DEBUG
 
 wifi:
-  ssid: "BvdBHome"
-  password: "^qsW6ES74JSm24!JTxOpW3!6WLIal@"
+  ssid: "IOT_Balegem"
+  password: "UN1Jeh3O3S"
 
   on_connect:
     - logger.log:

@@ -355,6 +355,9 @@ void setup() {
     loraOk = false;
   } else {
     LoRa.setSyncWord(LORA_SYNC_WORD);
+    LoRa.setSpreadingFactor(7);      // expliciet SF7, zoals ESP32
+    LoRa.setSignalBandwidth(125E3);  // 125 kHz, zoals ESP32
+    LoRa.enableCrc();                // CRC aan, zoals ESP32
     Serial.println("LoRa gereed.");
     loraOk = true;
   }

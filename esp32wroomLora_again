@@ -1,0 +1,271 @@
+esphome:
+  name: esp32-wroom-wifi-debug
+  friendly_name: ESP32 WROOM WiFi Debug Minimal
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+  level: DEBUG
+
+wifi:
+  ssid: "BvdBHome"
+  password: "^qsW6ES74JSm24!JTxOpW3!6WLIal@"
+
+  on_connect:
+    - logger.log:
+        format: "✓ Verbonden met WiFi. IP: %s, RSSI: %d dBm"
+        args: ['WiFi.localIP().toString().c_str()', 'WiFi.RSSI()']
+
+  on_disconnect:
+    - logger.log: "✗ WiFi verbinding verbroken"
+    
+  manual_ip:
+    static_ip: 192.168.0.50
+    gateway: 192.168.0.1
+    subnet: 255.255.255.0
+
+  ap:
+    ssid: "esp32_lora_fallback"
+    password: "12345678"
+
+captive_portal:
+
+api:
+  encryption:
+    key: "cV4s1Y6mO6d6+XwcvFmgc7xvPZ+5nGh7d3bJDxKXnTw="
+
+ota:
+  platform: esphome
+  password: "OfuIQi4Wd7"
+
+web_server:
+  port: 80
+
+# SPI-bus naar RFM95W (ESP32 WROOM-32D)
+spi:
+  clk_pin: GPIO18      # SCK
+  mosi_pin: GPIO23     # MOSI
+  miso_pin: GPIO19     # MISO
+
+# SX127x (RFM95W) LoRa-config
+sx127x:
+  id: lora_radio
+  cs_pin: GPIO5        # NSS/CS
+  rst_pin: GPIO14      # RESET
+  dio0_pin: GPIO26     # DIO0 naar GPIO26
+  frequency: 868000000      # 868 MHz
+  modulation: LORA
+  bandwidth: 125_0kHz
+  spreading_factor: 7
+  coding_rate: CR_4_5
+  sync_value: 0x12          # zelfde als Arduino-LoRa
+  crc_enable: true          # LoRa CRC aan, zoals Arduino-library
+  preamble_size: 8
+  rx_start: true
+
+  # Wanneer een JSON-pakket van de Arduino binnenkomt
+  on_packet:
+    then:
+      - lambda: |-
+          // x = std::vector<uint8_t> payload
+          ESP_LOGD("lora", "raw packet: %s", format_hex(x).c_str());
+
+          std::string s(x.begin(), x.end());
+          ESP_LOGD("lora", "text packet: %s", s.c_str());
+          ESP_LOGD("lora", "rssi: %.2f dB, snr: %.2f dB", rssi, snr);
+
+          // Verwachte JSON-payload:
+          // {"light":512,"threshold":600,"door":"OPEN","reedTop":0,"reedBottom":1}
+
+          auto get_int = [&](const char *key) -> int {
+            std::string k(key);
+            size_t pos = s.find(k);
+            if (pos == std::string::npos) return -1;
+            pos += k.size();
+            size_t end = s.find_first_of(",}", pos);
+            if (end == std::string::npos) end = s.size();
+            std::string num = s.substr(pos, end - pos);
+            return atoi(num.c_str());
+          };
+
+          auto get_str = [&](const char *key) -> std::string {
+            std::string k(key);
+            size_t pos = s.find(k);
+            if (pos == std::string::npos) return "";
+            pos += k.size();
+            size_t end = s.find('"', pos);
+            if (end == std::string::npos) return "";
+            return s.substr(pos, end - pos);
+          };
+
+          int light_val       = get_int("\"light\":");
+          int threshold_val   = get_int("\"threshold\":");
+          int reed_top_val    = get_int("\"reedTop\":");
+          int reed_bottom_val = get_int("\"reedBottom\":");
+          std::string door    = get_str("\"door\":\"");
+
+          if (light_val >= 0) {
+            id(lora_light).publish_state(light_val);
+          }
+          if (threshold_val >= 0) {
+            id(lora_threshold_rx).publish_state(threshold_val);
+          }
+
+          if (!door.empty()) {
+            id(lora_door_state).publish_state(door.c_str());
+          }
+
+          if (reed_top_val == 0 || reed_top_val == 1) {
+            id(lora_reed_top).publish_state(reed_top_val == 1);
+          }
+
+          if (reed_bottom_val == 0 || reed_bottom_val == 1) {
+            id(lora_reed_bottom).publish_state(reed_bottom_val == 1);
+          }
+
+          // RSSI en SNR als sensoren publiceren
+          id(lora_rssi).publish_state(rssi);
+          id(lora_snr).publish_state(snr);
+
+          // Timestamp laatste ontvangst (UNIX-timestamp)
+          id(lora_last_rx).publish_state(id(esptime).now().timestamp);
+
+# Sensors zichtbaar in Home Assistant
+sensor:
+  - platform: template
+    id: lora_light
+    name: "Kippenluik lichtwaarde"
+    unit_of_measurement: ""
+    icon: "mdi:brightness-5"
+    accuracy_decimals: 0
+    update_interval: never
+    state_class: measurement
+
+  - platform: template
+    id: lora_threshold_rx
+    name: "Kippenluik drempel (0-1023)"
+    unit_of_measurement: ""
+    icon: "mdi:tune-variant"
+    accuracy_decimals: 0
+    update_interval: never
+    state_class: measurement
+
+  - platform: template
+    id: lora_rssi
+    name: "LoRa RSSI"
+    unit_of_measurement: "dBm"
+    icon: "mdi:signal-cellular-3"
+    accuracy_decimals: 1
+    update_interval: never
+    device_class: signal_strength
+    state_class: measurement
+    entity_category: diagnostic
+
+  - platform: template
+    id: lora_snr
+    name: "LoRa SNR"
+    unit_of_measurement: "dB"
+    icon: "mdi:waveform"
+    accuracy_decimals: 1
+    update_interval: never
+    state_class: measurement
+    entity_category: diagnostic
+
+  - platform: template
+    id: lora_last_rx
+    name: "LoRa laatste ontvangst"
+    device_class: timestamp
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    id: lora_last_tx
+    name: "LoRa laatste verzending"
+    device_class: timestamp
+    entity_category: diagnostic
+    update_interval: never
+
+  # WiFi signaalsterkte (diagnostisch)
+  - platform: wifi_signal
+    name: "WiFi signaalsterkte"
+    update_interval: 60s
+    entity_category: diagnostic
+
+# Binary sensoren voor de reed-contacten (vanuit Arduino)
+binary_sensor:
+  - platform: template
+    id: lora_reed_top
+    name: "Kippenluik bovenste reed"
+    device_class: opening
+
+  - platform: template
+    id: lora_reed_bottom
+    name: "Kippenluik onderste reed"
+    device_class: opening
+
+  # Status van de ESP32 zelf
+  - platform: status
+    name: "ESP32 status"
+    entity_category: diagnostic
+
+# Tekstsensor voor de status van het luik ("OPEN", "CLOSED", ...)
+text_sensor:
+  - platform: template
+    id: lora_door_state
+    name: "Kippenluik status"
+    icon: "mdi:gate"
+
+  - platform: wifi_info
+    ip_address:
+      name: "ESP32 IP adres"
+      entity_category: diagnostic
+
+# Threshold instellen in Home Assistant en via LoRa naar Arduino sturen
+number:
+  - platform: template
+    id: lora_threshold
+    name: "Kippenluik threshold (0-255 naar LoRa)"
+    min_value: 0
+    max_value: 255
+    step: 1
+    optimistic: true
+    restore_value: true
+    icon: "mdi:tune-variant"
+    mode: box  # input box i.p.v. slider
+    entity_category: config
+    on_value:
+      - lambda: |-
+          // x = nieuwe waarde 0–255
+          uint8_t thr = static_cast<uint8_t>(x);
+          std::vector<uint8_t> pkt;
+          pkt.push_back('T');   // commando type 'T' = threshold
+          pkt.push_back(thr);   // 0-255
+
+          auto err = id(lora_radio).transmit_packet(pkt);
+          ESP_LOGI("lora",
+                   "TX threshold packet: cmd='T', val=%u (status=%d)",
+                   (unsigned) thr, (int) err);
+
+          // Timestamp van laatste verzending
+          id(lora_last_tx).publish_state(id(esptime).now().timestamp);
+
+# Time component voor timestamps
+time:
+  - platform: homeassistant
+    id: esptime
+
+# Button om manueel een statusupdate op te vragen (commando 'S')
+button:
+  - platform: template
+    name: "Kippenluik status opvragen"
+    icon: "mdi:refresh"
+    entity_category: config
+    on_press:
+      - lambda: |-
+          std::vector<uint8_t> pkt;
+          pkt.push_back('S');   // 'S' = Status request command
+          auto err = id(lora_radio).transmit_packet(pkt);
+          ESP_LOGI("lora", "TX status request (status=%d)", (int) err);

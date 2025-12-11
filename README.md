@@ -29,7 +29,7 @@ Samen vormen ze een draadloze, betrouwbare oplossing om een kippenluik automatis
   "reedBottom": 1
 }
 
-## 📡 LoRa-commando’s
+**## 📡 LoRa-commando’s**
 
 Verwerkt inkomende LoRa-commando’s:
 
@@ -38,7 +38,7 @@ Verwerkt inkomende LoRa-commando’s:
 
 ---
 
-## 🛰 ESP32 LoRa Bridge (ESPHome)
+**## 🛰 ESP32 LoRa Bridge (ESPHome)**
 
 De ESP32 ontvangt LoRa-berichten van de Arduino en publiceert die als entiteiten in **Home Assistant**:
 
@@ -61,7 +61,7 @@ external_components:
   - source: github://pr#7490
     components: [ sx127x ]
 
-## 🔧 Hardwarepinnen
+**## 🔧 Hardwarepinnen**
 
 ### Arduino UNO → RFM95W
 
@@ -87,21 +87,21 @@ external_components:
 
 ---
 
-## 🧱 Dependencies
+**## 🧱 Dependencies**
 
-### Arduino
+**### Arduino**
 - LoRa library  
 - EEPROM (standaard)  
 - SPI (standaard)
 
-### ESPHome
+**### ESPHome**
 - ESPHome 2025.10.0 of recenter  
 - Externe `sx127x` component via PR  
 - Home Assistant (optioneel maar aanbevolen)
 
 ---
 
-## 🧪 Testen
+**## 🧪 Testen**
 
 1. Start de **Arduino** → zou *LoRa gereed* moeten melden.  
 2. Start de **ESP32** → ESPHome-console moet *RX-pakketten* tonen.  
@@ -114,20 +114,20 @@ external_components:
 
 ---
 
-## 📁 Bestanden
+**## 📁 Bestanden**
 
-- `/arduino/kippenluik.ino`  
-- `/esp32/esp32-wroom-chicken-rx-tx.yaml`  
-- `/docs/README.md` (dit document)
+- `/kippenluik_v4_LoRa_def.ino`  
+- `/esp32-wroom32D-LoRa_def.yaml`  
+- `/README.md` (dit document)
 
 ---
 
-## 📜 Licentie
+**## 📜 Licentie**
 
 Vrij te gebruiken en aan te passen voor niet-commerciële projecten.
 
 ---
 
-## 💬 Contact / Issues
-
+**## 💬 Contact / Issues
+**
 Open een GitHub issue bij fouten, suggesties of vragen.

@@ -34,6 +34,11 @@ const int LORA_NSS  = 7;
 const int LORA_RST  = 6;
 const int LORA_DIO0 = 3;
 
+// SPI-pinnen UNO (vast):
+// SCK  = 13
+// MISO = 12
+// MOSI = 11
+
 unsigned long lastLoraSend = 0;
 const unsigned long LORA_INTERVAL = 5000; // elke 5 s een pakket sturen
 bool loraOk = false;

@@ -17,6 +17,8 @@ void handleSerial();
 void calibrate();
 bool moveTo(bool toOpen);
 void updateLightMode(int lightValue);
+bool motorActive = false;
+
 
 // =====================================================
 // MINIMALE, ROBUUSTE KIPPENLUIK-CODE (zonder LoRa)
@@ -51,8 +53,8 @@ const unsigned long LIGHT_STABLE_MS = 15000UL;
 // -----------------------------
 const unsigned long DEFAULT_OPEN_MS  = 10000UL;
 const unsigned long DEFAULT_CLOSE_MS = 10000UL;
-const unsigned long MIN_TIMEOUT_MS   = 3000UL;
-const unsigned long MAX_TIMEOUT_MS   = 30000UL;
+const unsigned long MIN_TIMEOUT_MS   = 100000UL;
+const unsigned long MAX_TIMEOUT_MS   = 100000UL;
 
 const float         CAL_MARGIN_FACTOR = 1.25f;
 const unsigned long CAL_MARGIN_MS     = 1000UL;
@@ -73,16 +75,22 @@ void motorStop() {
   analogWrite(ENA, 0);
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, LOW);
+  motorActive = false;
+
 }
 void motorUp() {
   analogWrite(ENA, PWM_SPEED);
   digitalWrite(IN1, HIGH);
   digitalWrite(IN2, LOW);
+  motorActive = true;
+
 }
 void motorDown() {
   analogWrite(ENA, PWM_SPEED);
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, HIGH);
+  motorActive = true;
+
 }
 
 // -----------------------------
@@ -176,6 +184,8 @@ void printStatus(int lightValue, const Reeds& r) {
   Serial.print(" Top="); Serial.print(r.top ? "1" : "0");
   Serial.print(" Bot="); Serial.print(r.bottom ? "1" : "0");
   Serial.print(" State="); Serial.print(stateStr(state));
+  Serial.print(" Motor=");
+  Serial.print(motorActive ? "ON" : "OFF");
   Serial.print(" Topen="); Serial.print(maxOpenTime);
   Serial.print(" Tclose="); Serial.println(maxCloseTime);
 }
@@ -393,7 +403,7 @@ void loop() {
   }
 
   static unsigned long lastStatus = 0;
-  if (millis() - lastStatus > 5000UL) {
+  if (millis() - lastStatus > 1000UL) {
     printStatus(lightValue, r);
     lastStatus = millis();
   }

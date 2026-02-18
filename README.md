@@ -6,6 +6,7 @@ Dit project bestaat uit twee onderdelen:
 2. **ESP32 WROOM32D + RFM95W (LoRa-brug naar Home Assistant via ESPHome)**
 
 Samen vormen ze een draadloze, betrouwbare oplossing om een kippenluik automatisch te openen/sluiten op basis van lichtsterkte, met statusrapportering, remote instellingen en diagnostiek.
+https://app.cirkitdesigner.com/project/e5ca5108-8e1d-4cd1-b3eb-05e4a613478f
 
 ---
 
